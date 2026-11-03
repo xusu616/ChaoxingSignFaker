@@ -71,20 +71,16 @@ android {
     ].find { it.exists() }
     def releaseStorePath = providers.environmentVariable("RELEASE_KEYSTORE_PATH")
             .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PATH"))
-            .orElse(fallbackKeystore != null ? fallbackKeystore.absolutePath : null)
-            .orNull
+            .getOrNull() ?: fallbackKeystore?.absolutePath
     def releaseStorePassword = providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD")
             .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PASSWORD"))
-            .orElse(fallbackKeystore != null ? "007401" : null)
-            .orNull
+            .getOrNull() ?: (fallbackKeystore != null ? "007401" : null)
     def releaseKeyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS")
             .orElse(providers.gradleProperty("RELEASE_KEY_ALIAS"))
-            .orElse(fallbackKeystore != null ? "key0" : null)
-            .orNull
+            .getOrNull() ?: (fallbackKeystore != null ? "key0" : null)
     def releaseKeyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD")
             .orElse(providers.gradleProperty("RELEASE_KEY_PASSWORD"))
-            .orElse(fallbackKeystore != null ? "007400" : null)
-            .orNull
+            .getOrNull() ?: (fallbackKeystore != null ? "007400" : null)
     def isSigningConfigured = releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
     if (isSigningConfigured) {
