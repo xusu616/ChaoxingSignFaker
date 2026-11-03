@@ -32,6 +32,8 @@ class FaceRecognitionData {
     val failedPhoneNumbers: SnapshotStateList<String> = mutableStateListOf()
     val signUsedFaceBitmaps: SnapshotStateMap<String, Bitmap> = mutableStateMapOf()
     val failedImageInfos: SnapshotStateMap<String, Pair<String?, Bitmap?>> = mutableStateMapOf()
+    val failedDefaultProfilePhones: SnapshotStateSet<String> = mutableStateSetOf()
+    val roundRobinIndices: SnapshotStateMap<String, Int> = mutableStateMapOf()
 
     fun resolveIndex(
         phoneNumber: String,
@@ -63,6 +65,11 @@ class FaceRecognitionData {
         phoneNumber: String,
         otherUserSessionList: List<ChaoxingOtherUserSession?>
     ) {
+        if (currentStatus(phoneNumber, otherUserSessionList) ==
+            FaceRecognitionImageStatus.UseProfileImage
+        ) {
+            failedDefaultProfilePhones.add(phoneNumber)
+        }
         failedImageInfos[phoneNumber] =
             (faceImageObjectIds[phoneNumber]
                 ?: storedFaceImageObjectIds[phoneNumber]) to signUsedFaceBitmaps[phoneNumber]
@@ -86,6 +93,8 @@ class FaceRecognitionData {
         }
         failedPhoneNumbers.remove(phoneNumber)
         failedImageInfos.remove(phoneNumber)
+        failedDefaultProfilePhones.remove(phoneNumber)
+        roundRobinIndices.remove(phoneNumber)
     }
 
     suspend fun reportUsage(context: Context, phoneNumber: String, isFailure: Boolean) {

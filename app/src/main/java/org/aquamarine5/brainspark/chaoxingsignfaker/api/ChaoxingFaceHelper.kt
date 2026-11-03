@@ -50,14 +50,23 @@ object ChaoxingFaceHelper {
     fun selectCandidateFaceImage(
         images: List<ChaoxingFaceRecognitionImage>,
         isFailedBeforeInCurrentSession: Boolean,
+        isDefaultProfileFailedInCurrentSession: Boolean = false,
+        onRoundRobinNext: (() -> Int)? = null,
     ): ChaoxingFaceRecognitionImage? {
         val unfailedImages = images.filter { !it.isFailureBefore }
-        return if (isFailedBeforeInCurrentSession) {
-            unfailedImages.filter { it.useCount > 0 }.randomOrNull()
-                ?: unfailedImages.randomOrNull()
-        } else {
-            unfailedImages.randomOrNull()
+        if (unfailedImages.isNotEmpty()) {
+            return if (isFailedBeforeInCurrentSession) {
+                unfailedImages.filter { it.useCount > 0 }.randomOrNull()
+                    ?: unfailedImages.randomOrNull()
+            } else {
+                unfailedImages.randomOrNull()
+            }
         }
+        if (!isDefaultProfileFailedInCurrentSession || images.isEmpty() || onRoundRobinNext == null) {
+            return null
+        }
+        val nextIndex = onRoundRobinNext() % (images.size + 1)
+        return if (nextIndex < images.size) images[nextIndex] else null
     }
 
     suspend fun fetchDefaultFaceBitmap(
@@ -352,7 +361,7 @@ object ChaoxingFaceHelper {
                 if (image.objectId == objectId) {
                     image.toBuilder()
                         .setUseCount(image.useCount + 1)
-                        .setIsFailureBefore(image.isFailureBefore || isFailureBefore)
+                        .setIsFailureBefore(isFailureBefore)
                         .build()
                 } else image
             }
@@ -369,7 +378,7 @@ object ChaoxingFaceHelper {
                     if (image.objectId == objectId) {
                         image.toBuilder()
                             .setUseCount(image.useCount + 1)
-                            .setIsFailureBefore(image.isFailureBefore || isFailureBefore)
+                            .setIsFailureBefore(isFailureBefore)
                             .build()
                     } else image
                 }

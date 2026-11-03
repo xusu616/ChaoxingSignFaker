@@ -772,7 +772,16 @@ fun QRCodeSignScreen(
                                         val images = storedImages[session.phoneNumber].orEmpty()
                                         val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
                                             images,
-                                            isFailedBeforeInCurrentSession = session.phoneNumber in faceRecognitionData.failedPhoneNumbers
+                                            isFailedBeforeInCurrentSession = session.phoneNumber in faceRecognitionData.failedPhoneNumbers,
+                                            isDefaultProfileFailedInCurrentSession = session.phoneNumber in faceRecognitionData.failedDefaultProfilePhones,
+                                            onRoundRobinNext = {
+                                                val current =
+                                                    faceRecognitionData.roundRobinIndices[session.phoneNumber]
+                                                        ?: 0
+                                                faceRecognitionData.roundRobinIndices[session.phoneNumber] =
+                                                    current + 1
+                                                current
+                                            }
                                         )
                                         if (candidate != null) {
                                             faceRecognitionData.faceImageObjectIds[session.phoneNumber] =
@@ -934,7 +943,16 @@ fun QRCodeSignScreen(
                                             val images = storedImages[phoneNumber].orEmpty()
                                             val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
                                                 images,
-                                                isFailedBeforeInCurrentSession = phoneNumber in faceRecognitionData.failedPhoneNumbers
+                                                isFailedBeforeInCurrentSession = phoneNumber in faceRecognitionData.failedPhoneNumbers,
+                                                isDefaultProfileFailedInCurrentSession = phoneNumber in faceRecognitionData.failedDefaultProfilePhones,
+                                                onRoundRobinNext = {
+                                                    val current =
+                                                        faceRecognitionData.roundRobinIndices[phoneNumber]
+                                                            ?: 0
+                                                    faceRecognitionData.roundRobinIndices[phoneNumber] =
+                                                        current + 1
+                                                    current
+                                                }
                                             )
                                             candidate?.let { image ->
                                                 faceRecognitionData.faceImageObjectIds[phoneNumber] =
