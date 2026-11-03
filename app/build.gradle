@@ -65,14 +65,35 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    def releaseStorePath = providers.environmentVariable("RELEASE_KEYSTORE_PATH").orNull
-    if (releaseStorePath) {
+    def fallbackKeystore = [
+            file("new.jks"),
+            file("../termux-background/app/new.jks")
+    ].find { it.exists() }
+    def releaseStorePath = providers.environmentVariable("RELEASE_KEYSTORE_PATH")
+            .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PATH"))
+            .orElse(fallbackKeystore != null ? fallbackKeystore.absolutePath : null)
+            .orNull
+    def releaseStorePassword = providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD")
+            .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PASSWORD"))
+            .orElse(fallbackKeystore != null ? "007401" : null)
+            .orNull
+    def releaseKeyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS")
+            .orElse(providers.gradleProperty("RELEASE_KEY_ALIAS"))
+            .orElse(fallbackKeystore != null ? "key0" : null)
+            .orNull
+    def releaseKeyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD")
+            .orElse(providers.gradleProperty("RELEASE_KEY_PASSWORD"))
+            .orElse(fallbackKeystore != null ? "007400" : null)
+            .orNull
+    def isSigningConfigured = releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+    if (isSigningConfigured) {
         signingConfigs {
             release {
                 storeFile file(releaseStorePath)
-                storePassword providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD").get()
-                keyAlias providers.environmentVariable("RELEASE_KEY_ALIAS").get()
-                keyPassword providers.environmentVariable("RELEASE_KEY_PASSWORD").get()
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
@@ -91,7 +112,7 @@ android {
                     getDefaultProguardFile("proguard-android-optimize.txt"),
                     "proguard-rules.pro"
             )
-            if (releaseStorePath) signingConfig signingConfigs.release
+            if (isSigningConfigured) signingConfig signingConfigs.release
             buildConfigField("String", "releaseDate", "\"${new Date().format('yyyy-MM-dd HH:mm:ss')}\"")
         }
         debug {

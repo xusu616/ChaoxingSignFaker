@@ -86,6 +86,7 @@ import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.ChaoxingPredictabl
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.FaceRecognitionImageStatus
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.LocalSnackbarHostState
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.chaoxingDataStore
+import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.displaySnackbar
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.rememberFaceRecognitionData
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.saveSelectedLocation
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.snackbarReport
@@ -569,7 +570,7 @@ fun LocationSignScreen(
                             },
                             faceRecognitionData = faceRecognitionData.takeIf { isFaceRequired },
                             isCloneSession = destination.isCloneSession,
-                            onRetrySignAction = { index, session, bypassChecking ->
+                            onRetrySignAction = onRetrySignAction@{ index, session, bypassChecking ->
                                 if (isFaceRequired) {
                                     val isPrepared = faceRecognitionData.ensureFaceImagePrepared(
                                         context = context,

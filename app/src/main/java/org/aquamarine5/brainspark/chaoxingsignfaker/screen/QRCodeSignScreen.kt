@@ -763,7 +763,7 @@ fun QRCodeSignScreen(
                                     }
                                 },
                                 isSigning = isSigning,
-                                onRetrySignAction = { index, session, bypassChecking ->
+                                onRetrySignAction = onRetrySignAction@{ index, session, bypassChecking ->
                                     if (isFaceRequired) {
                                         val isPrepared = faceRecognitionData.ensureFaceImagePrepared(
                                             context = context,
