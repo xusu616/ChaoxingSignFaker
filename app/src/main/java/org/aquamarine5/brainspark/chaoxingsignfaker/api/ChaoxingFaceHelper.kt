@@ -43,6 +43,19 @@ object ChaoxingFaceHelper {
 
     const val MAX_FACE_IMAGES = 5
 
+    fun selectCandidateFaceImage(
+        images: List<ChaoxingFaceRecognitionImage>,
+        isFailedBeforeInCurrentSession: Boolean,
+    ): ChaoxingFaceRecognitionImage? {
+        val unfailedImages = images.filter { !it.isFailureBefore }
+        return if (isFailedBeforeInCurrentSession) {
+            unfailedImages.filter { it.useCount > 0 }.randomOrNull()
+                ?: unfailedImages.randomOrNull()
+        } else {
+            unfailedImages.randomOrNull() ?: images.randomOrNull()
+        }
+    }
+
     suspend fun checkFaceResultAndGetEnc(
         client: ChaoxingHttpClient,
         objectId: String,

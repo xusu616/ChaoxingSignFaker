@@ -570,6 +570,23 @@ fun LocationSignScreen(
                             faceRecognitionData = faceRecognitionData.takeIf { isFaceRequired },
                             isCloneSession = destination.isCloneSession,
                             onRetrySignAction = { index, session, bypassChecking ->
+                                if (isFaceRequired && session.phoneNumber !in faceRecognitionData.faceImageObjectIds) {
+                                    val storedImages =
+                                        ChaoxingFaceHelper.storedFaceRecognitionImages.getValue(
+                                            context
+                                        )
+                                    val images = storedImages[session.phoneNumber].orEmpty()
+                                    val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
+                                        images,
+                                        isFailedBeforeInCurrentSession = session.phoneNumber in faceRecognitionData.failedPhoneNumbers
+                                    )
+                                    candidate?.let { image ->
+                                        faceRecognitionData.faceImageObjectIds[session.phoneNumber] =
+                                            image.objectId
+                                        faceRecognitionData.storedFaceImageObjectIds[session.phoneNumber] =
+                                            image.objectId
+                                    }
+                                }
                                 signHandler.retryOtherUserSigning(
                                     session,
                                     index,
@@ -600,12 +617,10 @@ fun LocationSignScreen(
                                         )
                                     selectedPhoneNumbers.forEach { phoneNumber ->
                                         val images = storedImages[phoneNumber].orEmpty()
-                                        val candidate =
-                                            if (phoneNumber in faceRecognitionData.failedPhoneNumbers)
-                                                images.filter {
-                                                    !it.isFailureBefore && it.useCount > 0
-                                                }.randomOrNull()
-                                            else images.randomOrNull()
+                                        val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
+                                            images,
+                                            isFailedBeforeInCurrentSession = phoneNumber in faceRecognitionData.failedPhoneNumbers
+                                        )
                                         candidate?.let { image ->
                                             faceRecognitionData.faceImageObjectIds[phoneNumber] =
                                                 image.objectId
