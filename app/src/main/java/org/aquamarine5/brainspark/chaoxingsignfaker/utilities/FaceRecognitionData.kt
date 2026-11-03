@@ -109,6 +109,63 @@ class FaceRecognitionData {
             }
         }
     }
+
+    suspend fun ensureFaceImagePrepared(
+        context: Context,
+        phoneNumber: String,
+        otherUserSessionList: List<ChaoxingOtherUserSession?>,
+        onNotice: suspend (String) -> Unit = {}
+    ): Boolean {
+        if (phoneNumber in faceImageObjectIds || phoneNumber in capturedBitmaps) {
+            return true
+        }
+        val storedImages = ChaoxingFaceHelper.storedFaceRecognitionImages.getValue(context)
+        val images = storedImages[phoneNumber].orEmpty()
+        val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
+            images = images,
+            isFailedBeforeInCurrentSession = phoneNumber in failedPhoneNumbers,
+            isDefaultProfileFailedInCurrentSession = phoneNumber in failedDefaultProfilePhones,
+            onRoundRobinNext = {
+                val current = roundRobinIndices[phoneNumber] ?: 0
+                roundRobinIndices[phoneNumber] = current + 1
+                current
+            }
+        )
+        if (candidate != null) {
+            faceImageObjectIds[phoneNumber] = candidate.objectId
+            storedFaceImageObjectIds[phoneNumber] = candidate.objectId
+            return true
+        }
+        onNotice("正在获取学习通默认人脸照片...")
+        return runCatching {
+            val bitmap = ChaoxingFaceHelper.fetchDefaultFaceBitmap(context, phoneNumber)
+            setStatus(
+                FaceRecognitionImageStatus.UseProfileImage,
+                phoneNumber,
+                otherUserSessionList
+            )
+            capturedBitmaps[phoneNumber] = bitmap
+        }.isSuccess
+    }
+
+    suspend fun ensureFaceImagesPrepared(
+        context: Context,
+        phoneNumbers: List<String>,
+        otherUserSessionList: List<ChaoxingOtherUserSession?>,
+        onNotice: suspend (String) -> Unit = {}
+    ): Boolean {
+        var isAllPrepared = true
+        phoneNumbers.forEach { phoneNumber ->
+            val isPrepared = ensureFaceImagePrepared(
+                context,
+                phoneNumber,
+                otherUserSessionList,
+                onNotice
+            )
+            if (!isPrepared) isAllPrepared = false
+        }
+        return isAllPrepared
+    }
 }
 
 @Composable

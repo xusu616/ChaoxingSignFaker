@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2026, @aquamarine5 (@海蓝色的咕咕鸽). All Rights Reserved.
  * Author: aquamarine5@163.com (Github: https://github.com/aquamarine5) and Brainspark (previously RenegadeCreation)
  * Repository: https://github.com/aquamarine5/ChaoxingSignFaker
@@ -70,7 +70,8 @@ class ChaoxingSignHandler<in T>(
         bypassChecking: Boolean,
         hapticFeedback: HapticFeedback,
         coroutineScope: CoroutineScope,
-        snackbarHost: SnackbarHostState
+        snackbarHost: SnackbarHostState,
+        otherUserSessionList: List<ChaoxingOtherUserSession?> = emptyList(),
     ): Result<ChaoxingSignResult> {
         val realtimeParameterProvider = getSignRealtimeParameter
         val fallbackValue = storedValue
@@ -87,6 +88,8 @@ class ChaoxingSignHandler<in T>(
                     else
                         signStatus[1 + index].success()
                     userSelections[index + 1] = false
+                    faceRecognitionData?.markSuccess(session.phoneNumber, otherUserSessionList)
+                    faceRecognitionData?.reportUsage(context, session.phoneNumber, false)
                     onSigningFinished(value, session.name, true)
                 }
         }.onFailure {
@@ -96,6 +99,16 @@ class ChaoxingSignHandler<in T>(
             } else {
                 if (it.isSessionObsoletedCausing)
                     ChaoxingOtherUserHelper.markSessionObsoleted(session, context)
+                if (it is ChaoxingFaceSignException)
+                    faceRecognitionData?.markFailure(
+                        session.phoneNumber,
+                        otherUserSessionList
+                    )
+                faceRecognitionData?.reportUsage(
+                    context,
+                    session.phoneNumber,
+                    it is ChaoxingFaceSignException
+                )
                 signStatus[1 + index].failed(it)
                 it.snackbarReport(
                     snackbarHost,

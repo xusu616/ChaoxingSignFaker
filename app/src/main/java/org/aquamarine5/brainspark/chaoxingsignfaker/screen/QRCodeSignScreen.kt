@@ -764,52 +764,18 @@ fun QRCodeSignScreen(
                                 },
                                 isSigning = isSigning,
                                 onRetrySignAction = { index, session, bypassChecking ->
-                                    if (isFaceRequired && session.phoneNumber !in faceRecognitionData.faceImageObjectIds) {
-                                        val storedImages =
-                                            ChaoxingFaceHelper.storedFaceRecognitionImages.getValue(
-                                                context
-                                            )
-                                        val images = storedImages[session.phoneNumber].orEmpty()
-                                        val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
-                                            images,
-                                            isFailedBeforeInCurrentSession = session.phoneNumber in faceRecognitionData.failedPhoneNumbers,
-                                            isDefaultProfileFailedInCurrentSession = session.phoneNumber in faceRecognitionData.failedDefaultProfilePhones,
-                                            onRoundRobinNext = {
-                                                val current =
-                                                    faceRecognitionData.roundRobinIndices[session.phoneNumber]
-                                                        ?: 0
-                                                faceRecognitionData.roundRobinIndices[session.phoneNumber] =
-                                                    current + 1
-                                                current
-                                            }
+                                    if (isFaceRequired) {
+                                        val isPrepared = faceRecognitionData.ensureFaceImagePrepared(
+                                            context = context,
+                                            phoneNumber = session.phoneNumber,
+                                            otherUserSessionList = signUserList,
+                                            onNotice = { snackbarHost.displaySnackbar(it, coroutineScope) }
                                         )
-                                        if (candidate != null) {
-                                            faceRecognitionData.faceImageObjectIds[session.phoneNumber] =
-                                                candidate.objectId
-                                            faceRecognitionData.storedFaceImageObjectIds[session.phoneNumber] =
-                                                candidate.objectId
-                                        } else {
-                                            snackbarHost.displaySnackbar("正在获取学习通默认人脸照片...", coroutineScope)
-                                            runCatching {
-                                                val bitmap = ChaoxingFaceHelper.fetchDefaultFaceBitmap(
-                                                    context,
-                                                    session.phoneNumber
-                                                )
-                                                faceRecognitionData.setStatus(
-                                                    FaceRecognitionImageStatus.UseProfileImage,
-                                                    session.phoneNumber,
-                                                    signUserList
-                                                )
-                                                faceRecognitionData.capturedBitmaps[session.phoneNumber] =
-                                                    bitmap
-                                            }.onFailure {
-                                                it.snackbarReport(
-                                                    snackbarHost,
-                                                    coroutineScope,
-                                                    "获取默认人脸识别照片失败",
-                                                    hapticFeedback
-                                                )
-                                            }
+                                        if (!isPrepared) {
+                                            snackbarHost.displaySnackbar("获取默认人脸识别照片失败", coroutineScope)
+                                            return@onRetrySignAction Result.failure(
+                                                ChaoxingPredictableException("获取默认人脸识别照片失败")
+                                            )
                                         }
                                     }
                                     signHandler.retryOtherUserSigning(
@@ -818,7 +784,8 @@ fun QRCodeSignScreen(
                                         bypassChecking,
                                         hapticFeedback,
                                         coroutineScope,
-                                        snackbarHost
+                                        snackbarHost,
+                                        otherUserSessionList = signUserList
                                     ).onFailure {
                                         if (it is ChaoxingSigner.WrongPositionException &&
                                             it.isAlreadyDisabledRandomizedLocation
@@ -935,65 +902,16 @@ fun QRCodeSignScreen(
                                                 otherUserSessionList.filterNotNull()
                                                     .map { it.phoneNumber })
                                         }
-                                        val storedImages =
-                                            ChaoxingFaceHelper.storedFaceRecognitionImages.getValue(
-                                                context
-                                            )
-                                        selectedPhoneNumbers.forEach { phoneNumber ->
-                                            val images = storedImages[phoneNumber].orEmpty()
-                                            val candidate = ChaoxingFaceHelper.selectCandidateFaceImage(
-                                                images,
-                                                isFailedBeforeInCurrentSession = phoneNumber in faceRecognitionData.failedPhoneNumbers,
-                                                isDefaultProfileFailedInCurrentSession = phoneNumber in faceRecognitionData.failedDefaultProfilePhones,
-                                                onRoundRobinNext = {
-                                                    val current =
-                                                        faceRecognitionData.roundRobinIndices[phoneNumber]
-                                                            ?: 0
-                                                    faceRecognitionData.roundRobinIndices[phoneNumber] =
-                                                        current + 1
-                                                    current
-                                                }
-                                            )
-                                            candidate?.let { image ->
-                                                faceRecognitionData.faceImageObjectIds[phoneNumber] =
-                                                    image.objectId
-                                                faceRecognitionData.storedFaceImageObjectIds[phoneNumber] =
-                                                    image.objectId
-                                            }
-                                        }
-                                        val missingPhoneNumbers = selectedPhoneNumbers.filter {
-                                            it !in faceRecognitionData.faceImageObjectIds
-                                        }
-                                        if (missingPhoneNumbers.isNotEmpty()) {
-                                            snackbarHost.displaySnackbar(
-                                                "正在获取学习通默认人脸照片...",
-                                                coroutineScope
-                                            )
-                                            val isFetchSuccess = runCatching {
-                                                missingPhoneNumbers.forEach { phoneNumber ->
-                                                    val bitmap =
-                                                        ChaoxingFaceHelper.fetchDefaultFaceBitmap(
-                                                            context,
-                                                            phoneNumber
-                                                        )
-                                                    faceRecognitionData.setStatus(
-                                                        FaceRecognitionImageStatus.UseProfileImage,
-                                                        phoneNumber,
-                                                        signUserList
-                                                    )
-                                                    faceRecognitionData.capturedBitmaps[phoneNumber] =
-                                                        bitmap
-                                                }
-                                            }.onFailure {
-                                                it.snackbarReport(
-                                                    snackbarHost,
-                                                    coroutineScope,
-                                                    "获取默认人脸识别照片失败",
-                                                    hapticFeedback
-                                                )
-                                                isSigning.value = false
-                                            }.isSuccess
-                                            if (!isFetchSuccess) return@launch
+                                        val isPrepared = faceRecognitionData.ensureFaceImagesPrepared(
+                                            context = context,
+                                            phoneNumbers = selectedPhoneNumbers,
+                                            otherUserSessionList = signUserList,
+                                            onNotice = { snackbarHost.displaySnackbar(it, coroutineScope) }
+                                        )
+                                        if (!isPrepared) {
+                                            snackbarHost.displaySnackbar("获取默认人脸识别照片失败", coroutineScope)
+                                            isSigning.value = false
+                                            return@launch
                                         }
                                     }
                                     if (isMapRequired && locationData == null) {
