@@ -774,11 +774,33 @@ fun QRCodeSignScreen(
                                             images,
                                             isFailedBeforeInCurrentSession = session.phoneNumber in faceRecognitionData.failedPhoneNumbers
                                         )
-                                        candidate?.let { image ->
+                                        if (candidate != null) {
                                             faceRecognitionData.faceImageObjectIds[session.phoneNumber] =
-                                                image.objectId
+                                                candidate.objectId
                                             faceRecognitionData.storedFaceImageObjectIds[session.phoneNumber] =
-                                                image.objectId
+                                                candidate.objectId
+                                        } else {
+                                            snackbarHost.displaySnackbar("正在获取学习通默认人脸照片...", coroutineScope)
+                                            runCatching {
+                                                val bitmap = ChaoxingFaceHelper.fetchDefaultFaceBitmap(
+                                                    context,
+                                                    session.phoneNumber
+                                                )
+                                                faceRecognitionData.setStatus(
+                                                    FaceRecognitionImageStatus.UseProfileImage,
+                                                    session.phoneNumber,
+                                                    signUserList
+                                                )
+                                                faceRecognitionData.capturedBitmaps[session.phoneNumber] =
+                                                    bitmap
+                                            }.onFailure {
+                                                it.snackbarReport(
+                                                    snackbarHost,
+                                                    coroutineScope,
+                                                    "获取默认人脸识别照片失败",
+                                                    hapticFeedback
+                                                )
+                                            }
                                         }
                                     }
                                     signHandler.retryOtherUserSigning(
@@ -921,14 +943,42 @@ fun QRCodeSignScreen(
                                                     image.objectId
                                             }
                                         }
-                                    }
-                                    if (isFaceRequired && (
-                                                (isSelf && ChaoxingHttpClient.instance!!.phoneNumber !in faceRecognitionData.faceImageObjectIds.keys) ||
-                                                        otherUserSessionList.any { it != null && it.phoneNumber !in faceRecognitionData.faceImageObjectIds.keys }
+                                        val missingPhoneNumbers = selectedPhoneNumbers.filter {
+                                            it !in faceRecognitionData.faceImageObjectIds
+                                        }
+                                        if (missingPhoneNumbers.isNotEmpty()) {
+                                            snackbarHost.displaySnackbar(
+                                                "正在获取学习通默认人脸照片...",
+                                                coroutineScope
+                                            )
+                                            val isFetchSuccess = runCatching {
+                                                missingPhoneNumbers.forEach { phoneNumber ->
+                                                    val bitmap =
+                                                        ChaoxingFaceHelper.fetchDefaultFaceBitmap(
+                                                            context,
+                                                            phoneNumber
+                                                        )
+                                                    faceRecognitionData.setStatus(
+                                                        FaceRecognitionImageStatus.UseProfileImage,
+                                                        phoneNumber,
+                                                        signUserList
+                                                    )
+                                                    faceRecognitionData.capturedBitmaps[phoneNumber] =
+                                                        bitmap
+                                                }
+                                            }.onFailure {
+                                                it.snackbarReport(
+                                                    snackbarHost,
+                                                    coroutineScope,
+                                                    "获取默认人脸识别照片失败",
+                                                    hapticFeedback
                                                 )
-                                    ) {
-                                        isFaceImageCaptured = true
-                                    } else if (isMapRequired && locationData == null) {
+                                                isSigning.value = false
+                                            }.isSuccess
+                                            if (!isFetchSuccess) return@launch
+                                        }
+                                    }
+                                    if (isMapRequired && locationData == null) {
                                         isMapGetting = true
                                     } else {
                                         beginQRContinuousSigning()

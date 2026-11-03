@@ -8,6 +8,7 @@ package org.aquamarine5.brainspark.chaoxingsignfaker.api
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import com.alibaba.fastjson2.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -17,16 +18,19 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.aquamarine5.brainspark.chaoxingsignfaker.datastore.ChaoxingFaceRecognitionConfigure
 import org.aquamarine5.brainspark.chaoxingsignfaker.datastore.ChaoxingFaceRecognitionImage
+import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.ChaoxingFaceImageException
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.ChaoxingParseDataException
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.StoredData
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.chaoxingDataStore
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.checkResponseThrowException
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.checkThrowFaceException
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.logLocally
+import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.randomizeStylizeImage
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.storedData
 import java.io.File
 import java.security.MessageDigest
 import java.util.TreeMap
+import java.util.concurrent.TimeUnit
 
 object ChaoxingFaceHelper {
     val storedFaceRecognitionImages: StoredData<Context, Map<String, List<ChaoxingFaceRecognitionImage>>> =
@@ -52,7 +56,31 @@ object ChaoxingFaceHelper {
             unfailedImages.filter { it.useCount > 0 }.randomOrNull()
                 ?: unfailedImages.randomOrNull()
         } else {
-            unfailedImages.randomOrNull() ?: images.randomOrNull()
+            unfailedImages.randomOrNull()
+        }
+    }
+
+    suspend fun fetchDefaultFaceBitmap(
+        context: Context,
+        phoneNumber: String,
+    ): Bitmap = withContext(Dispatchers.IO) {
+        val requester = ChaoxingHttpRequesterPool.getRequester(context, phoneNumber)
+        val url = getUserProfileFaceImageUrl(requester)
+        val httpClient = ((requester as? ChaoxingHttpClient)?.okHttpClient
+            ?: ChaoxingHttpClient.instance!!.okHttpClient).newBuilder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+        httpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            response.checkResponseThrowException()
+            response.body.byteStream().use { stream ->
+                val bytes = stream.readBytes()
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?: throw ChaoxingFaceImageException(
+                        "默认人脸识别照片下载失败, body=${bytes.toString(Charsets.UTF_8)}"
+                    )
+                randomizeStylizeImage(bitmap).also { bitmap.recycle() }
+            }
         }
     }
 
