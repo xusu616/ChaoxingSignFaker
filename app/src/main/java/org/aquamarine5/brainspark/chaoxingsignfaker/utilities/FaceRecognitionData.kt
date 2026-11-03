@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.snapshots.SnapshotStateSet
+import kotlinx.coroutines.CancellationException
 import org.aquamarine5.brainspark.chaoxingsignfaker.api.ChaoxingFaceHelper
 import org.aquamarine5.brainspark.chaoxingsignfaker.api.ChaoxingHttpClient
 import org.aquamarine5.brainspark.chaoxingsignfaker.datastore.ChaoxingOtherUserSession
@@ -136,6 +137,7 @@ class FaceRecognitionData {
             storedFaceImageObjectIds[phoneNumber] = candidate.objectId
             return true
         }
+        storedFaceImageObjectIds.remove(phoneNumber)
         onNotice("正在获取学习通默认人脸照片...")
         return runCatching {
             val bitmap = ChaoxingFaceHelper.fetchDefaultFaceBitmap(context, phoneNumber)
@@ -145,6 +147,8 @@ class FaceRecognitionData {
                 otherUserSessionList
             )
             capturedBitmaps[phoneNumber] = bitmap
+        }.onFailure {
+            if (it is CancellationException) throw it
         }.isSuccess
     }
 
@@ -154,7 +158,6 @@ class FaceRecognitionData {
         otherUserSessionList: List<ChaoxingOtherUserSession?>,
         onNotice: suspend (String) -> Unit = {}
     ): Boolean {
-        var isAllPrepared = true
         phoneNumbers.forEach { phoneNumber ->
             val isPrepared = ensureFaceImagePrepared(
                 context,
@@ -162,9 +165,9 @@ class FaceRecognitionData {
                 otherUserSessionList,
                 onNotice
             )
-            if (!isPrepared) isAllPrepared = false
+            if (!isPrepared) return false
         }
-        return isAllPrepared
+        return true
     }
 }
 

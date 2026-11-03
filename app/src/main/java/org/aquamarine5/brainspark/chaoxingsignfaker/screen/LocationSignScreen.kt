@@ -579,9 +579,10 @@ fun LocationSignScreen(
                                     )
                                     if (!isPrepared) {
                                         snackbarHost.displaySnackbar("获取默认人脸识别照片失败", coroutineScope)
-                                        return@onRetrySignAction Result.failure(
+                                        val exception =
                                             ChaoxingPredictableException("获取默认人脸识别照片失败")
-                                        )
+                                        signStatus[1 + index].failed(exception)
+                                        return@onRetrySignAction Result.failure(exception)
                                     }
                                 }
                                 signHandler.retryOtherUserSigning(
