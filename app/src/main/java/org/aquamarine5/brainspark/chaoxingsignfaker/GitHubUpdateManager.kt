@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.chaoxingDataStore
 import org.aquamarine5.brainspark.chaoxingsignfaker.utilities.checkPredictable
@@ -44,7 +46,7 @@ class GitHubUpdateManager(private val activity: ComponentActivity) {
         isChecking = true
         activity.lifecycleScope.launch {
             runCatching {
-                status = "正在检查 GitHub 更新…"
+                status = "正在检查更新…"
                 val latest = withContext(Dispatchers.IO) { fetch() }
                 val comparison = compareVersions(latest.tag, BuildConfig.VERSION_NAME)
                 checkPredictable(comparison != null) { "无法比较版本 ${latest.tag}，请检查发布标签" }
@@ -68,6 +70,21 @@ class GitHubUpdateManager(private val activity: ComponentActivity) {
     }
 
     private fun fetch(): GitHubRelease {
+        val gitHubResult = runCatching { fetchGitHub() }
+        val gitHubError = gitHubResult.exceptionOrNull()
+        if (gitHubError is CancellationException) throw gitHubError
+        if (gitHubResult.isSuccess) {
+            return gitHubResult.getOrThrow()
+        }
+        return runCatching { fetchGitLab() }
+            .onFailure { gitLabError ->
+                if (gitLabError is CancellationException) throw gitLabError
+                gitHubError?.let { gitLabError.addSuppressed(it) }
+            }
+            .getOrThrow()
+    }
+
+    private fun fetchGitHub(): GitHubRelease {
         val request = Request.Builder().url("https://api.github.com/repos/rD227/ChaoxingSignFaker/releases/latest")
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "ChaoxingSignFaker-rD227/${BuildConfig.VERSION_NAME}").build()
@@ -75,17 +92,7 @@ class GitHubUpdateManager(private val activity: ComponentActivity) {
             checkPredictable(response.code != 404) { "暂无正式 Release，发布后即可检查更新" }
             checkPredictable(response.code != 403 && response.code != 429) { "GitHub 请求受限，请稍后重试" }
             checkPredictable(response.isSuccessful) { "检查更新失败：HTTP ${response.code}" }
-            val bytes = response.body.byteStream().use { input ->
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(8192)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count == -1) break
-                    checkPredictable(output.size() + count <= MAX_RELEASE_BYTES) { "Release 响应过大" }
-                    output.write(buffer, 0, count)
-                }
-                output.toByteArray()
-            }
+            val bytes = readResponseBody(response)
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             checkPredictable(!json.getBoolean("draft") && !json.getBoolean("prerelease")) { "暂无正式 Release" }
             val assets = json.getJSONArray("assets")
@@ -100,6 +107,48 @@ class GitHubUpdateManager(private val activity: ComponentActivity) {
             checkPredictable(uri.scheme == "https" && uri.host == "github.com" &&
                 uri.path.orEmpty().startsWith("/rD227/ChaoxingSignFaker/releases/download/")) { "更新附件地址无效" }
             GitHubRelease(json.getString("tag_name"), json.optString("body"), url)
+        }
+    }
+
+    private fun fetchGitLab(): GitHubRelease {
+        val request = Request.Builder()
+            .url("https://gitlab.com/api/v4/projects/xusu616%2FChaoxingSignFaker/releases?per_page=1")
+            .header("Accept", "application/json")
+            .header("User-Agent", "ChaoxingSignFaker-rD227/${BuildConfig.VERSION_NAME}").build()
+        return client.newCall(request).execute().use { response ->
+            checkPredictable(response.code != 404) { "暂无正式 Release，发布后即可检查更新" }
+            checkPredictable(response.code != 403 && response.code != 429) { "GitLab 请求受限，请稍后重试" }
+            checkPredictable(response.isSuccessful) { "检查更新失败：HTTP ${response.code}" }
+            val bytes = readResponseBody(response)
+            val releases = JSONArray(bytes.toString(Charsets.UTF_8))
+            checkPredictable(releases.length() > 0) { "暂无正式 Release，发布后即可检查更新" }
+            val json = releases.getJSONObject(0)
+            val assets = json.optJSONObject("assets")
+            val links = assets?.optJSONArray("links")
+            checkPredictable(links != null && links.length() > 0) { "最新 Release 未包含默认构建名称的 APK" }
+            val candidates = (0 until links.length()).map { links.getJSONObject(it) }
+            val asset = candidates.firstOrNull { it.optString("name") == "app-release.apk" }
+                ?: candidates.firstOrNull { it.optString("name") == "app-release-unsigned.apk" }
+                ?: candidates.firstOrNull { it.optString("name").endsWith(".apk") }
+            checkPredictable(asset != null) { "最新 Release 未包含默认构建名称的 APK" }
+            val url = asset.getString("url")
+            val uri = url.toUri()
+            checkPredictable(uri.scheme == "https" && uri.host == "gitlab.com") { "更新附件地址无效" }
+            GitHubRelease(json.getString("tag_name"), json.optString("description"), url)
+        }
+    }
+
+    private fun readResponseBody(response: Response): ByteArray {
+        return response.body.byteStream().use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count == -1) break
+                checkPredictable(output.size() + count <= MAX_RELEASE_BYTES) { "Release 响应过大" }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
         }
     }
 
