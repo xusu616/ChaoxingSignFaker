@@ -1,3 +1,5 @@
+> 📦 **Release 下载提示**：请前往对应的 GitLab 仓库查看或下载 Release（GitHub 端暂不重复上传）👉 [https://gitlab.com/xusu616/ChaoxingSignFaker/-/releases](https://gitlab.com/xusu616/ChaoxingSignFaker/-/releases) （[GitLab 仓库主页](https://gitlab.com/xusu616/ChaoxingSignFaker)）
+
 # ChaoxingSignFaker · rD227 修改版
 
 基于 [aquamarine5/ChaoxingSignFaker](https://github.com/aquamarine5/ChaoxingSignFaker) 修改，原作者为 aquamarine5 / Brainspark。保留原作者版权说明，继续使用 [GNU AGPL v3](LICENSE)
